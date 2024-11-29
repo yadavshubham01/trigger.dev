@@ -2,6 +2,9 @@ import { Attributes } from "@opentelemetry/api";
 
 export const NULL_SENTINEL = "$@null((";
 export const CIRCULAR_REFERENCE_SENTINEL = "$@circular((";
+function escapeKey(key: string): string {
+  return key.replace(/\./g, '\\.');
+}
 
 export function flattenAttributes(
   obj: Record<string, unknown> | Array<unknown> | string | boolean | number | null | undefined,
@@ -53,7 +56,8 @@ export function flattenAttributes(
 
 
   for (const [key, value] of Object.entries(obj)) {
-    const newPrefix = `${prefix ? `${prefix}.` : ""}${Array.isArray(obj) ? `[${key}]` : key}`;
+  const escapedKey = escapeKey(key);
+    const newPrefix = `${prefix ? `${prefix}.` : ""}${Array.isArray(obj) ? `[${escapedKey}]` : escapedKey}`;
     if (Array.isArray(value)) {
       for (let i = 0; i < value.length; i++) {
         if (typeof value[i] === "object" && value[i] !== null) {
@@ -85,6 +89,9 @@ export function flattenAttributes(
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
+function unescapeKey(key: string): string {
+  return key.replace(/\\\./g, '.');
+}
 
 export function unflattenAttributes(
   obj: Attributes
@@ -109,8 +116,10 @@ export function unflattenAttributes(
   const result: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(obj)) {
-    const parts = key.split(".").reduce(
-      (acc, part) => {
+   const parts = key
+      .split(/(?<!\\)\./) // Split by unescaped dots
+      .map(unescapeKey)   // Unescape keys
+      .reduce((acc, part) => {
         if (part.startsWith("[") && part.endsWith("]")) {
           // Handle array indices more precisely
           const match = part.match(/^\[(\d+)\]$/);
